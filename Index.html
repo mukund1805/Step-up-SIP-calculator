@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Step-Up SIP Calculator</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+:root{
+  --primary:#1e3a8a;
+  --bg:#f1f5f9;
+  --card:#ffffff;
+  --text:#0f172a;
+  --muted:#64748b;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:Segoe UI,Arial,sans-serif;background:var(--bg);padding:20px;color:var(--text)}
+.header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+.brand{font-weight:700;font-size:20px;color:var(--primary)}
+.unit-toggle{padding:6px 10px;border-radius:8px;border:1px solid #cbd5e1}
+.layout{display:grid;grid-template-columns:460px 1fr;gap:24px}
+.card{background:var(--card);padding:22px;border-radius:14px;box-shadow:0 8px 20px rgba(0,0,0,.08)}
+label{display:block;margin-top:10px;font-size:13px;font-weight:600;color:var(--muted)}
+input{width:100%;padding:10px;margin-top:6px;border-radius:8px;border:1px solid #ccc}
+button{margin-top:16px;width:100%;padding:12px;border:none;border-radius:10px;background:var(--primary);color:#fff;font-weight:600;cursor:pointer}
+.result p{display:flex;justify-content:space-between;align-items:center;margin:10px 0;font-size:15px}
+.result p span:first-child{font-weight:700}
+.result span:last-child{font-weight:800;font-size:19px}
+canvas{margin-top:16px;height:360px !important}
+.tables{margin-top:24px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{border-bottom:1px solid #e5e7eb;padding:6px;text-align:right}
+th{text-align:center;color:var(--muted)}
+@media(max-width:900px){.layout{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="brand">Step-Up SIP Calculator</div>
+  <select id="unit" class="unit-toggle" onchange="calculate()">
+    <option value="lakh">Lakhs</option>
+    <option value="crore">Crores</option>
+  </select>
+</div>
+
+<div class="layout">
+  <!-- LEFT: INPUTS -->
+  <div class="card">
+    <label>Monthly SIP (₹)</label>
+    <input id="sip" type="number" value="10000" />
+
+    <label>Annual Step-Up (%)</label>
+    <input id="stepUp" type="number" value="10" />
+
+    <label>Expected Return (%)</label>
+    <input id="rate" type="number" value="12" />
+
+    <label>Total Months</label>
+    <input id="months" type="number" value="240" />
+
+    <label>Lump Sum (Month-1)</label>
+    <input id="lump" type="number" value="0" />
+
+    <label>Target (Lakhs)</label>
+    <input id="target" type="number" value="100" />
+
+    <label>Inflation Rate (%)</label>
+    <input id="inflation" type="number" value="6" />
+
+    <button onclick="calculate()">Calculate</button>
+  </div>
+
+  <!-- RIGHT: RESULTS + CHART -->
+  <div class="card">
+    <div class="result">
+      <p><span>Total Invested</span><span id="invested">-</span></p>
+      <p><span>Market Value</span><span id="value">-</span></p>
+      <p><span>Inflation Adjusted</span><span id="realValue">-</span></p>
+      <p><span>Target Month</span><span id="targetMonth">-</span></p>
+    </div>
+    <canvas id="chart"></canvas>
+  </div>
+</div>
+
+<div class="tables card">
+  <h3>Year-wise Summary</h3>
+  <table id="yearTable">
+    <thead><tr><th>Year</th><th>Invested</th><th>Value</th></tr></thead>
+    <tbody></tbody>
+  </table>
+</div>
+
+<script>
+let chart = null;
+
+function calculate() {
+  const unit = document.getElementById('unit').value;
+  const divisor = unit === 'crore' ? 10000000 : 100000;
+  const suffix  = unit === 'crore' ? ' Cr' : ' L';
+
+  const sip = Number(document.getElementById('sip').value);
+  const stepUp = Number(document.getElementById('stepUp').value) / 100;
+  const annual = Number(document.getElementById('rate').value) / 100;
+  const months = Number(document.getElementById('months').value);
+  const lump = Number(document.getElementById('lump').value);
+  const target = Number(document.getElementById('target').value) * 100000;
+  const inflation = Number(document.getElementById('inflation').value) / 100;
+
+  let mv = 0;
+  let inv = 0;
+  let targetM = 'Not Reached';
+  let yearInv = 0;
+
+  const monthly = annual / 12;
+
+  const labels = [];
+  const investedArr = [];
+  const returnsArr = [];
+  const years = [];
+
+  for (let m = 1; m <= months; m++) {
+    const sipNow = sip * Math.pow(1 + stepUp, Math.floor((m - 1) / 12));
+    mv = mv * (1 + monthly) + sipNow;
+    inv += sipNow;
+    yearInv += sipNow;
+
+    if (m === 1 && lump) {
+      mv += lump;
+      inv += lump;
+      yearInv += lump;
+    }
+
+    if (mv >= target && targetM === 'Not Reached') targetM = m;
+
+    if (m % 12 === 0) {
+      const year = m / 12;
+      labels.push('Year ' + year);
+      investedArr.push(inv / divisor);
+      returnsArr.push((mv - inv) / divisor);
+      years.push({ y: year, i: yearInv, v: mv });
+      yearInv = 0;
+    }
+  }
+
+  document.getElementById('invested').innerText = (inv / divisor).toFixed(2) + suffix;
+  document.getElementById('value').innerText = (mv / divisor).toFixed(2) + suffix;
+  document.getElementById('realValue').innerText = (mv / Math.pow(1 + inflation, months / 12) / divisor).toFixed(2) + suffix;
+  document.getElementById('targetMonth').innerText = targetM;
+
+  const tbody = document.querySelector('#yearTable tbody');
+  tbody.innerHTML = '';
+  years.forEach(y => {
+    tbody.innerHTML += `<tr><td>${y.y}</td><td>${(y.i / divisor).toFixed(2)}${suffix}</td><td>${(y.v / divisor).toFixed(2)}${suffix}</td></tr>`;
+  });
+
+  const ctx = document.getElementById('chart');
+  if (chart) chart.destroy();
+
+  chart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: 'Invested (₹ ' + (unit === 'crore' ? 'Crores' : 'Lakhs') + ')',
+          data: investedArr,
+          backgroundColor: '#9ca3af',
+          stack: 'stack1'
+        },
+        {
+          label: 'Returns (₹ ' + (unit === 'crore' ? 'Crores' : 'Lakhs') + ')',
+          data: returnsArr,
+          backgroundColor: '#22c55e',
+          stack: 'stack1'
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { position: 'top' },
+        tooltip: {
+          callbacks: {
+            title: items => items[0].label,
+            label: ctx => ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(2) + suffix,
+            footer: items => {
+              const invv = items.find(i => i.dataset.label.startsWith('Invested'))?.parsed.y || 0;
+              const rett = items.find(i => i.dataset.label.startsWith('Returns'))?.parsed.y || 0;
+              return 'Total Value: ' + (invv + rett).toFixed(2) + suffix;
+            }
+          }
+        }
+      },
+      scales: {
+        x: { stacked: true },
+        y: { stacked: true, title: { display: true, text: '₹ ' + (unit === 'crore' ? 'Crores' : 'Lakhs') } }
+      }
+    }
+  });
+}
+</script>
+</body>
+</html>
